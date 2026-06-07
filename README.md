@@ -2,7 +2,7 @@
 
 > AI-powered contract analysis, risk detection, and compliance review — built for legal and compliance teams operating under GDPR and the EU AI Act.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](s1.png)
 
 ## Overview
 
@@ -277,8 +277,8 @@ POST /api/v1/contracts/compare
 Content-Type: application/json
 
 {
-  "contract_a_id": "uuid-1",
-  "contract_b_id": "uuid-2"
+  "source_contract_id": "uuid-1",
+  "target_contract_id": "uuid-2"
 }
 
 Returns: 200 OK (streamed)
