@@ -10,8 +10,8 @@ Contract Intelligence is a production-grade AI platform that enables legal and c
 
 This is not a prototype. It is built with the same architectural patterns and engineering standards used in production AI systems at scale.
 
-**Live Demo:** [contract-intelligence.demo.com](https://contract-intelligence.demo.com)  
-**API Docs:** [api.contract-intelligence.demo.com/docs](https://api.contract-intelligence.demo.com/docs)
+<!-- **Live Demo:** [contract-intelligence.demo.com](https://contract-intelligence.demo.com)  
+**API Docs:** [api.contract-intelligence.demo.com/docs](https://api.contract-intelligence.demo.com/docs) -->
 
 ---
 
