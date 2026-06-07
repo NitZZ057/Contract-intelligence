@@ -9,6 +9,8 @@ from app.schemas.contracts import (
     ContractComparisonRequest,
     ContractComparisonResponse,
     ContractListResponse,
+    ContractQuestionRequest,
+    ContractQuestionResponse,
     ContractResponse,
     ContractUploadResponse,
     ErrorResponse,
@@ -53,6 +55,25 @@ async def compare_contracts(
 ) -> ContractComparisonResponse:
     """Return structured changes between two processed contracts."""
     return await service.compare_contracts(db, payload.source_contract_id, payload.target_contract_id)
+
+
+@router.post(
+    "/{contract_id}/ask",
+    response_model=ContractQuestionResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponse},
+        status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponse},
+    },
+)
+async def ask_contract_question(
+    contract_id: UUID,
+    payload: ContractQuestionRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ContractQuestionResponse:
+    """Answer a question using the processed contract text."""
+    return await service.ask_contract_question(db, contract_id, payload.question)
 
 
 @router.get(

@@ -1,0 +1,11 @@
+What’s built now:
+
+Core backend config, LLM factory, async DB engine/session
+SQLAlchemy contract model and initial Alembic migration
+Contract schemas with consistent ErrorResponse
+Contract repository
+PDF parser and text chunker
+Contract service
+Celery app and async contract processing task
+Contracts router: upload, get by ID, list
+FastAPI app setup: lifespan, CORS, request logging, error handlers, health check

@@ -102,3 +102,17 @@ class ContractComparisonResponse(BaseModel):
     removed_count: int
     modified_count: int
     changes: list[ContractChangeResponse]
+
+
+class ContractQuestionRequest(BaseModel):
+    """Question submitted against a processed contract."""
+
+    question: str = Field(min_length=3, max_length=1_000)
+
+
+class ContractQuestionResponse(BaseModel):
+    """Answer generated from contract context."""
+
+    answer: str
+    source_chunks: list[str]
+    confidence: float = Field(ge=0.0, le=1.0)
