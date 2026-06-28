@@ -1,0 +1,56 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: contract_intelligence_redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: contract_intelligence_backend
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: contract_intelligence_celery
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    env_file:
+      - ./backend/.env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    command: celery -A app.tasks.contract_tasks worker --loglevel=info --concurrency=1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: contract_intelligence_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - backend
