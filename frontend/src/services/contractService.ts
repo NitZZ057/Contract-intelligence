@@ -11,6 +11,7 @@ import type {
   QAResponse,
   RiskLevel,
   UploadProgress,
+  ContractSummaryResponse,
 } from "@/types/contracts";
 import { toApiError } from "@/utils/errors";
 import { parseJsonFromStream, readStreamingText } from "@/utils/streaming";
@@ -100,6 +101,47 @@ async function fetchStreamedJson<TRequest, TResponse>(
   return parseJsonFromStream<TResponse>(streamedText);
 }
 
+function isContractSummaryResponse(value: unknown): value is ContractSummaryResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const summary = value as Partial<ContractSummaryResponse>;
+  const parties = summary.parties as Partial<ContractSummaryResponse["parties"]> | undefined;
+  const keyDates = summary.key_dates as Partial<ContractSummaryResponse["key_dates"]> | undefined;
+
+  return (
+    typeof summary.contract_id === "string" &&
+    typeof summary.filename === "string" &&
+    typeof summary.executive_summary === "string" &&
+    (typeof summary.contract_type === "string" || summary.contract_type === null) &&
+    (typeof summary.governing_law === "string" || summary.governing_law === null) &&
+    typeof parties === "object" &&
+    parties !== null &&
+    (typeof parties.service_provider === "string" || parties.service_provider === null) &&
+    (typeof parties.client === "string" || parties.client === null) &&
+    Array.isArray(parties.other_parties) &&
+    parties.other_parties.every((party) => typeof party === "string") &&
+    typeof keyDates === "object" &&
+    keyDates !== null &&
+    (typeof keyDates.effective_date === "string" || keyDates.effective_date === null) &&
+    (typeof keyDates.expiry_date === "string" || keyDates.expiry_date === null) &&
+    (typeof keyDates.renewal_date === "string" || keyDates.renewal_date === null) &&
+    (typeof keyDates.termination_notice_deadline === "string" ||
+      keyDates.termination_notice_deadline === null) &&
+    (typeof summary.payment_terms === "string" || summary.payment_terms === null) &&
+    (typeof summary.termination_conditions === "string" || summary.termination_conditions === null) &&
+    Array.isArray(summary.key_obligations) &&
+    summary.key_obligations.every((obligation) => typeof obligation === "string") &&
+    Array.isArray(summary.risk_flags) &&
+    summary.risk_flags.every((risk) => typeof risk === "string") &&
+    typeof summary.confidence === "number" &&
+    typeof summary.model_used === "string" &&
+    typeof summary.generated_at === "string" &&
+    (typeof summary.contract_page_count === "number" || summary.contract_page_count === null)
+  );
+}
+
 export const contractService = {
   async uploadContract(
     file: File,
@@ -184,6 +226,32 @@ export const contractService = {
         onChunk,
       );
     } catch (error: unknown) {
+      throw toApiError(error);
+    }
+  },
+
+  async summarizeContract(contractId: string): Promise<ContractSummaryResponse>{
+    try{
+
+      if (!contractId.trim()){
+        throw {
+          message: "Contract ID is required to generate a summary",
+          code: "missing_contract_id",
+        };
+      }
+
+      const response = await apiClient.post<ContractSummaryResponse>(`/api/v1/contracts/${contractId}/summary`,);
+      
+      if(!isContractSummaryResponse(response.data)){
+        throw {
+          message: "Summary response was missing required fields",
+          code: "invalid_summary_response",
+          status: response.status,
+        }
+      }
+
+      return response.data;
+    }catch (error: unknown){
       throw toApiError(error);
     }
   },

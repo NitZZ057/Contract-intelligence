@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(..., min_length=1)
     pinecone_api_key: str = Field(..., min_length=1)
     pinecone_index_name: str = "contract-intelligence"
+    pinecone_cloud: str = "aws"
+    pinecone_region: str = "us-east-1"
     database_url: str = Field(..., min_length=1)
 
     # Redis
