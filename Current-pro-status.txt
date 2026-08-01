@@ -1,0 +1,25 @@
+**Implemented RAG pipeline**
+
+- **Files:** client.py — Pinecone client: init, index creation, upsert, query.  
+- **Files:** contract_tasks.py — After text extraction, chunks are created and upserted into Pinecone (best-effort, errors logged).  
+- **Files:** contract_service.py — `ask_contract_question` now attempts semantic retrieval via Pinecone and falls back to lexical chunking.
+
+**What I implemented**
+- Added a lightweight Pinecone client (`upsert_contract_chunks`, `query_contract_chunks`) that:
+  - Initializes Pinecone (using `settings.pinecone_api_key`), ensures the index exists (creates it if missing), and upserts chunked text with metadata (`contract_id`, `text`, `chunk_index`).
+  - Queries the index with an embedded query vector and returns the matched chunk texts.
+- Integrated ingestion into the async processing pipeline so processed contracts are indexed automatically (chunked with existing `chunk_text`).
+- Switched question answering to prefer Pinecone-backed retrieval, falling back to the existing lexical ranking when no vectors are available.
+
+**Why / design decisions**
+- Best-effort ingestion: indexing errors do not fail contract processing — they are logged. This prevents vector-store problems from blocking core functionality.
+- Chunking reuse: used existing `chunk_text` splitter to keep chunking behavior consistent across features.
+- Embedding dimension detection: computed a sample embedding to set index dimension when creating an index; fallback dimension used if embedding call fails (safe default).
+- Batch upserts: use batching (64) for efficient upserts and predictable memory use.
+- Safe query fallback: keep the existing lexical selection as a fallback to ensure QA still works if Pinecone is not configured or returns no matches.
+- Error handling: all Pinecone calls are wrapped with exception logging to surface issues without raising unhandled exceptions at request time.
+
+**Next steps (options)**
+- Run an end-to-end test: upload a PDF, wait for processing, then call QA to verify Pinecone retrieval. I can add a small smoke-test script if you want.
+- Harden index lifecycle: add index deletion/migration, environment configuration for Pinecone region, and retry/backoff for transient errors.
+- Continue with Feature 3 (missing clause & risk detection) now that retrieval is in place.

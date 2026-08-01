@@ -13,6 +13,8 @@ from app.db.models import ContractStatus
 from app.db.repository import ContractRepository
 from app.ingestion.pdf_parser import extract_text_from_pdf
 from app.tasks.celery_app import celery_app
+from app.ingestion.chunker import chunk_text
+from app.rag.client import upsert_contract_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,12 @@ async def _process_contract_async(contract_id: UUID) -> None:
                 extraction["text"],
                 extraction["page_count"],
             )
+            # Ingest text chunks into Pinecone for semantic retrieval (best-effort).
+            try:
+                chunks = chunk_text(extraction["text"], chunk_size=1400, chunk_overlap=180)
+                upsert_contract_chunks(str(contract_id), chunks)
+            except Exception:
+                logger.exception("Failed to ingest contract %s into vector store", contract_id)
             await repository.update_status(db, contract_id, ContractStatus.PROCESSED)
             await db.commit()
             logger.info("Processed contract %s", contract_id)

@@ -98,6 +98,37 @@ export interface UploadProgress {
   percent: number;
 }
 
+export interface ContractParties{
+  service_provider: string | null;
+  client: string | null;
+  other_parties: string[];
+}
+
+export interface KeyDates{
+  effective_date: string | null;
+  expiry_date: string | null;
+  renewal_date: string | null;
+  termination_notice_deadline: string | null;
+}
+
+export interface ContractSummaryResponse{
+  contract_id: string;
+  filename: string;
+  executive_summary: string;
+  contract_type: string | null
+  governing_law: string | null;
+  parties: ContractParties;
+  key_dates: KeyDates;
+  payment_terms: string | null;
+  termination_conditions: string | null;
+  key_obligations: string[];
+  risk_flags: string[];
+  confidence: number;
+  model_used: string;
+  generated_at: string;
+  contract_page_count: number | null;
+}
+
 export interface HealthResponse {
   status: string;
   service: string;

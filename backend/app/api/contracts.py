@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import get_db
@@ -14,8 +14,16 @@ from app.schemas.contracts import (
     ContractResponse,
     ContractUploadResponse,
     ErrorResponse,
+    ContractSummaryResponse
 )
 from app.services.contract_service import ContractService
+
+from app.core.exceptions import (
+    ContractNotFoundError,
+    ContractNotReadyError,
+    ContractTextMissingError,
+    LLMServiceError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,3 +105,41 @@ async def list_contracts(
 ) -> ContractListResponse[ContractResponse]:
     """Return a paginated list of contracts."""
     return await service.list_contracts(db, skip, limit)
+
+@router.post(
+    "/{contract_id}/summary",
+    response_model=ContractSummaryResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponse},
+        status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponse},
+    }
+)
+async def summarize_contract(
+    contract_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ContractSummaryResponse:
+    """Return a structured summary of the contract."""
+    try:
+        return await service.summarize_contract(db, contract_id)
+    except ContractNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ContractNotReadyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc)
+        )
+    except ContractTextMissingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except LLMServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc

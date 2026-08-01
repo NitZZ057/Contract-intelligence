@@ -10,6 +10,7 @@ import type {
   PaginationParams,
   QAResponse,
   UploadProgress,
+  ContractSummaryResponse,
 } from "@/types/contracts";
 import { toApiError } from "@/utils/errors";
 
@@ -118,4 +119,16 @@ export function useAskQuestion() {
     ...mutation,
     streamedText,
   };
+}
+
+export function useSummarizeContract() {
+  const mutation = useMutation<ContractSummaryResponse, Error, {contractId: string}>({
+    mutationFn: ({contractId}) => contractService.summarizeContract(contractId),
+    onError: (error) => {
+      const apiError = toApiError(error);
+      toast.error(apiError.message);
+    },
+  });
+
+  return mutation;
 }

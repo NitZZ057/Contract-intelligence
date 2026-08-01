@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -116,3 +116,60 @@ class ContractQuestionResponse(BaseModel):
     answer: str
     source_chunks: list[str]
     confidence: float = Field(ge=0.0, le=1.0)
+
+class ContractParties(BaseModel):
+    """Parties involved in the contract."""
+    service_provider: Optional[str] = None
+    client: Optional[str] = None
+    other_parties: list[str] = Field(default_factory=list)
+
+class KeyDates(BaseModel):
+    """Important dates extracted from the contract."""
+    effective_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    renewal_date: Optional[str] = None
+    termination_notice_deadline: Optional[str] = None
+
+class ContractSummaryResponse(BaseModel):
+    """Executive summary generated from contract text."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    contract_id: UUID
+    filename: str
+
+    # Core summary
+    executive_summary: str = Field(
+        description="2-3 sentence plain-English summary of the entire contract"
+    )
+    contract_type: str | None = Field(
+        default=None,
+        description="e.g. Service Agreement, NDA, Employment Contract"
+    )
+    governing_law: Optional[str] = Field(
+        default=None,
+        description="Jurisdiction governing the contract"
+    )
+
+    # Structured extractions
+    parties: ContractParties
+    key_dates: KeyDates
+    risk_flags: list[str] = Field(default_factory=list)
+    payment_terms: Optional[str] = Field(
+        default=None,
+        description="Summary of payment obligations and schedule"
+    )
+    termination_conditions: Optional[str] = Field(
+        default=None,
+        description="Conditions under which either party can terminate"
+    )
+    key_obligations: list[str] = Field(
+        default_factory=list,
+        description="Notable risks or unusual clauses worth attention"
+    )
+
+    # Metadata
+    confidence: float = Field(ge=0.0, le=1.0)
+    model_used: str = Field(default="gpt-4o-mini")
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    contract_page_count: Optional[int] = None

@@ -1,11 +1,115 @@
-What’s built now:
+## Gap Analysis: Future Scope vs Current Implementation
 
-Core backend config, LLM factory, async DB engine/session
-SQLAlchemy contract model and initial Alembic migration
-Contract schemas with consistent ErrorResponse
-Contract repository
-PDF parser and text chunker
-Contract service
-Celery app and async contract processing task
-Contracts router: upload, get by ID, list
-FastAPI app setup: lifespan, CORS, request logging, error handlers, health check
+### Current implementation status
+
+#### Working / implemented
+- contracts.py
+  - Upload contract
+  - Compare two contracts
+  - Ask a question against one contract
+  - Get contract detail
+  - List contracts
+- contract_service.py
+  - Async PDF upload + storage
+  - Contract record creation and status lifecycle
+  - PDF text extraction via pdf_parser.py
+  - Celery async processing task in contract_tasks.py
+  - Document comparison via text section diffing
+  - Simple QA prompt generation using extracted text chunks
+- models.py / repository.py
+  - Contract model with status, extracted text, error tracking
+  - Async DB CRUD operations
+- Frontend pages
+  - ContractUpload.tsx
+  - ContractDetail.tsx
+  - ContractCompare.tsx
+  - ContractQA.tsx
+- Frontend hooks/services
+  - useContracts.ts
+  - contractService.ts
+  - UI flows for upload, polling, compare, QA
+
+#### Present but unused / incomplete
+- rag exists but is empty
+- evaluation exists but is empty
+- llm.py defines embeddings, but embeddings are not used anywhere
+- .env and .env.example include Pinecone config, but no Pinecone ingestion or retrieval implementation exists
+- README claims RAG evaluation and vector search architecture, but code does not actually implement those components
+
+---
+
+### Future scope items mapped to actual implementation
+
+1) **Analyze an entire contract and generate a concise executive summary**
+   - Current status: Not implemented
+   - Related code: no summary endpoint or summarization prompt logic exists
+   - Frontend: no UI for contract summarization
+
+2) **Identify and highlight key dates, deadlines, renewal terms, and important obligations**
+   - Current status: Not implemented
+   - Related code: text extraction exists, but no clause/date extraction or metadata highlighting
+   - Frontend: contract detail only shows raw extracted text
+
+3) **Detect missing clauses, inconsistencies, ambiguities, or potential risks within the contract**
+   - Current status: Partially implemented in a limited way
+   - What exists: text diff comparison between two versions via `SequenceMatcher`
+   - Missing: true missing clause detection, ambiguity analysis, structured risk detection, clause classification
+
+4) **Assess whether the contract aligns with applicable legal and regulatory requirements**
+   - Current status: Not implemented
+   - There is no legal/regulatory compliance analysis module or jurisdictional evaluation
+
+5) **Highlight breach-related provisions, including potential consequences, liabilities, remedies, and termination rights**
+   - Current status: Not implemented
+   - QA can potentially answer a question if the text contains it, but there is no dedicated breach-provision extraction or structured risk summary
+
+6) **Answer user questions conversationally using the contract as the source of truth, providing accurate references and context**
+   - Current status: Partially implemented
+   - What exists: contract QA endpoint uses lightweight chunk selection and LLM prompt
+   - Limitation: no real semantic retrieval or vector-backed source attribution; answer quality depends on heuristic chunk relevance and raw text
+   - Good baseline, but not full RAG / source-grounded conversational QA
+
+7) **Extract and explain key terms, obligations, responsibilities, and risks for all parties involved**
+   - Current status: Not implemented
+   - Current QA is generic; no structured extraction of terms or obligations
+
+8) **Provide actionable insights and recommendations to improve contract quality, compliance, and risk management**
+   - Current status: Not implemented
+   - There is no recommendation generation path or risk improvement guidance logic
+
+---
+
+### Recommendation
+
+#### Should we proceed further?
+Yes — the repository is a good foundation, but it is not yet at the future scope shown in the image.
+
+#### What should come next
+1. Implement a dedicated contract summarization endpoint
+2. Add clause extraction / entity extraction for dates, obligations, renewals, termination, etc.
+3. Build a real RAG pipeline:
+   - embed extracted chunks with `OpenAIEmbeddings`
+   - store/retrieve in Pinecone
+   - use semantic retrieval for QA
+4. Add structured risk/compliance analysis modules
+5. Populate rag and evaluation
+6. Update frontend flows for summaries, clause highlights, and risk dashboards
+
+> In short: the current system is a working MVP for upload, processing, compare, and QA, but the advanced contract intelligence features in the image are still future work.
+
+If you want, I can now create a concrete implementation plan with prioritized feature work and exact code/files to modify next.
+
+I'll take:
+- Feature 6 — Real RAG pipeline (Pinecone ingestion + semantic retrieval). I've already built this pattern in my policy analysis agent so I know exactly where the hard parts are.
+- Feature 3 — Missing clause + risk detection. Builds naturally on top of the existing compare logic.
+
+Then:
+- Feature 1 — Contract summarization. Single endpoint, one LLM call, great way to get familiar with the codebase and ship something visible fast.
+- Feature 2 — Key dates / obligations extraction. Structured JSON output from a well-scoped prompt. Fully independent, no blockers.
+
+Once RAG is solid we tackle Feature 7 and 5 together — they both depend on the retrieval layer being production-grade first.
+
+Feature 4 and 8 are deliberately last — they need everything else as a foundation.
+
+
+Don't start modifying the files yet. just create a plan

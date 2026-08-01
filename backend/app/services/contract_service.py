@@ -1,5 +1,6 @@
 import logging
 import re
+import json
 from asyncio import to_thread
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -8,6 +9,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, UploadFile, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from openai import OpenAIError
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -15,6 +17,7 @@ from app.core.llm import get_llm
 from app.db.models import Contract, ContractStatus
 from app.db.repository import ContractRepository
 from app.ingestion.chunker import chunk_text
+from app.rag.client import query_contract_chunks
 from app.schemas.contracts import (
     ContractChangeResponse,
     ContractChangeType,
@@ -23,8 +26,17 @@ from app.schemas.contracts import (
     ContractQuestionResponse,
     ContractResponse,
     ContractUploadResponse,
+    ContractSummaryResponse,
 )
 from app.tasks.contract_tasks import process_contract
+
+from app.prompts.summarize import SUMMARY_SYSTEM_PROMPT
+
+from app.core.exceptions import (
+    ContractNotFoundError,
+    ContractTextMissingError,
+    LLMServiceError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +47,7 @@ MIN_MODIFICATION_SIMILARITY = 0.35
 MAX_CHANGE_TEXT_LENGTH = 1_200
 MAX_QA_SOURCE_CHUNKS = 4
 MAX_QA_CONTEXT_CHARS = 6_000
+MAX_SUMMARY_CONTEXT_CHARS = 12_000
 
 
 class ContractService:
@@ -141,7 +154,10 @@ class ContractService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
 
         self._validate_contract_ready_for_comparison(contract)
-        source_chunks = self._select_relevant_chunks(contract.extracted_text or "", question)
+        # Prefer semantic retrieval via Pinecone; fall back to lexical chunk selection.
+        source_chunks = query_contract_chunks(str(contract.id), question, top_k=MAX_QA_SOURCE_CHUNKS)
+        if not source_chunks:
+            source_chunks = self._select_relevant_chunks(contract.extracted_text or "", question)
         if not source_chunks:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -395,3 +411,79 @@ class ContractService:
         answer_overlap = len(question_terms.intersection(answer_terms)) / max(len(question_terms), 1)
         confidence = min(0.95, max(0.25, (best_source_score * 0.75) + (answer_overlap * 0.25)))
         return round(confidence, 2)
+
+    async def summarize_contract(
+            self,
+            db: AsyncSession,
+            contract_id: UUID,
+    ) -> ContractSummaryResponse:
+        """Generate a concise summary of the contract using LLM."""
+        contract = await self.repository.get_by_id(db, contract_id)
+
+        if contract is None:
+            raise ContractNotFoundError(f"Contract {contract_id} not found")
+
+        self._validate_contract_ready_for_comparison(contract)
+        text = (contract.extracted_text or "").strip()
+
+        if not text:
+            raise ContractTextMissingError(
+                f"Contract {contract_id} has no extracted text to summarize"
+            )
+        
+        truncated_text = text[:MAX_SUMMARY_CONTEXT_CHARS]
+        if len(text) > MAX_SUMMARY_CONTEXT_CHARS:
+            logger.warning(
+                "Contract %s truncated from %d to %d chars for summarization",
+                contract_id, len(text), MAX_SUMMARY_CONTEXT_CHARS,
+            )
+
+        try:
+            llm = get_llm()
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(content=SUMMARY_SYSTEM_PROMPT),
+                    HumanMessage(content=F"Contract text:\n\n{truncated_text}"),
+                ]
+            )
+
+            raw_content = self._normalize_llm_content(response.content)
+        except OpenAIError as exc:
+            logger.exception("OpenAI request failed while summarizing contract %s", contract_id)
+            raise LLMServiceError(
+                "LLM provider failed while summarizing the contract",
+            ) from exc
+        except ValueError as exc:
+            logger.exception("LLM returned unsupported content while summarizing contract %s", contract_id)
+            raise LLMServiceError(
+                "LLM returned unsupported content while summarizing contract"
+            ) from exc
+
+        try:
+            parsed = json.loads(raw_content)
+
+            logger.info("Generated summary for contract %s", contract_id)
+            return ContractSummaryResponse(
+                contract_id=contract_id,
+                filename=contract.filename,
+                model_used=llm.model_name,
+                **parsed,
+            )
+        except json.JSONDecodeError as exc:
+            logger.error(
+                "LLM returned non-JSON response for contract %s: %s",
+                contract_id, raw_content[:200],
+            )
+            raise LLMServiceError(
+                "LLM returned an unparseable response"
+            ) from exc
+        except ValidationError as exc:
+            logger.exception(
+                "LLM returned unsupported content while summarizing contract %s: %s",
+                contract_id,
+                exc,
+            )
+            raise LLMServiceError(
+                "LLM returned unsupported content while summarizing contract"
+            ) from exc
+        
